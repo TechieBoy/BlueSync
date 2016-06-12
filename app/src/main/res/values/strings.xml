@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">BlueSync</string>
+    <string name="menu_test">Test</string>
+    <string name="bluetooth_not_supported">not supported on this device</string>
+    <string name="bluetooth_on">On</string>
+    <string name="bluetooth_off">Off</string>
+    <string name="activity_test_bluetooth">BlueTooth :</string>
+    <string name="activity_test_data_recieved">Data recieved :</string>
+    <string name="socket_status_unknown">Unknown</string>
+</resources>
