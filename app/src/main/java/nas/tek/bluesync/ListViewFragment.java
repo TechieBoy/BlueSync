@@ -1,5 +1,6 @@
 package nas.tek.bluesync;
 
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -37,8 +38,12 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
     private ItemAdapter mAdapter;
     private List<ListItem> listitems;
 
+    //Realm Database
     private Realm realm;
     private RealmConfiguration realmConfig;
+
+    //Ensures Proper Toast creation
+    private boolean shouldExecuteOnPause = false;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -51,6 +56,7 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
 
         RealmQuery<ListItem> query = realm.where(ListItem.class);
         RealmResults<ListItem> result = query.findAll();
+
         if(result.size()!=0){
             List<ListItem> managedListItems = new ArrayList<>();
             for(ListItem li: result){
@@ -61,11 +67,28 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
         }else if(result.size()==0) {
             listitems = Inventory.get().getItems();
         }
+
+
         mAdapter = new ItemAdapter(listitems);
         mBluetoothSerial = new BluetoothSerial(getActivity(),this);
+        shouldExecuteOnPause = true;
 
 
 
+    }
+
+
+    @Nullable
+    @Override
+    public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View v = inflater.inflate(R.layout.fragment_item_list,container,false);
+
+        mRecyclerView = (RecyclerView)v.findViewById(R.id.fragment_list_item_recycler_view);
+        mRecyclerView.setHasFixedSize(true);
+        mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        mRecyclerView.setAdapter(mAdapter);
+
+        return v;
     }
 
     @Override
@@ -73,6 +96,7 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
         super.onStart();
         mBluetoothSerial.setup();
     }
+
 
     @Override
     public void onResume() {
@@ -86,6 +110,12 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
 
 
 
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        shouldExecuteOnPause = false;
     }
 
     @Override
@@ -108,13 +138,26 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
 
     }
 
-    //Override methods
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        switch (requestCode){
+            case REQUEST_ENABLE_BLUETOOTH:
+                if(resultCode== Activity.RESULT_OK){
+                    mBluetoothSerial.setup();
+                }
+                break;
+        }
+    }
+
+    //Implemented methods of BluetoothSerialListener
     //========================================================================================
 
 
     @Override
     public void onBluetoothDeviceConnected(String name, String address) {
         Toast.makeText(getActivity(), "Connected to  " + name + " with address  " + address, Toast.LENGTH_LONG).show();
+
     }
 
     @Override
@@ -139,7 +182,9 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
 
     @Override
     public void onBluetoothDeviceDisconnected() {
-
+        if(shouldExecuteOnPause) {
+            Toast.makeText(getActivity(), "Device disconnected. Please ensure device is in range and paired", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -150,6 +195,8 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
     @Override
     public void onBluetoothSerialRead(String message) {
         String string = "";
+
+        //Regex to format received Data
         Pattern pattern = Pattern.compile("ID:(.*?):ID");
         Matcher matcher = pattern.matcher(message);
         if(matcher.find()) {
@@ -180,19 +227,8 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
 
     //=============================================================================================
 
-    @Nullable
-    @Override
-    public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View v = inflater.inflate(R.layout.fragment_item_list,container,false);
 
-        mRecyclerView = (RecyclerView)v.findViewById(R.id.fragment_list_item_recycler_view);
-        mRecyclerView.setHasFixedSize(true);
-        mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
-        mRecyclerView.setAdapter(mAdapter);
-
-        return v;
-    }
-
+    //ViewHolder for RecyclerView
     private class ItemHolder extends RecyclerView.ViewHolder{
         private TextView mTitleTextView;
         private CheckBox mPresentCheckBox;
@@ -211,6 +247,7 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
         }
     }
 
+    //Adapter for RecyclerView
     private class ItemAdapter extends RecyclerView.Adapter<ItemHolder>{
 
         private List<ListItem> mListItems;

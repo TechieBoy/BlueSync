@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /*
-*Storage Class which contains a stash of listItems to  dislplay
+*Storage Class which contains a stash of listItems to  display
  */
 public class Inventory {
     private static Inventory sInventory;
