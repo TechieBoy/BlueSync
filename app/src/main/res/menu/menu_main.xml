@@ -2,8 +2,25 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
       xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
-        android:id="@+id/menu_test"
-        android:title="@string/menu_test"
-        app:showAsAction="ifRoom"
+        android:id="@+id/menu_enable_notification"
+        android:title="@string/menu_enable_notification"
+        app:showAsAction="never"
         />
+    <item
+        android:id="@+id/menu_disable_notification"
+        android:title="@string/menu_disable_notification"
+        app:showAsAction="never"
+        />
+    <item
+        android:id="@+id/menu_start_service"
+        android:title="@string/menu_listen_for_devices"
+        app:showAsAction="never"
+        />
+    <item
+        android:id="@+id/menu_stop_service"
+        android:title="@string/menu_stop_listen_for_devices"
+        app:showAsAction="never"
+        />
+
+
 </menu>

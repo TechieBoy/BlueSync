@@ -1,16 +1,18 @@
 package nas.tek.bluesync;
 
-import android.app.Activity;
-import android.bluetooth.BluetoothAdapter;
-import android.content.DialogInterface;
+import android.app.ActivityManager;
+import android.app.Fragment;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
-import android.support.v4.app.Fragment;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
@@ -19,61 +21,79 @@ import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import io.realm.Realm;
+import io.realm.RealmChangeListener;
 import io.realm.RealmConfiguration;
 import io.realm.RealmQuery;
 import io.realm.RealmResults;
-import nas.tek.bluesync.BThelper.BluetoothSerial;
-import nas.tek.bluesync.BThelper.BluetoothSerialListener;
 
-public class ListViewFragment extends Fragment implements BluetoothSerialListener{
+public class ListViewFragment extends Fragment {
 
-    private BluetoothSerial mBluetoothSerial;
     private static final int REQUEST_ENABLE_BLUETOOTH = 1;
 
     private RecyclerView mRecyclerView;
     private ItemAdapter mAdapter;
-    private List<ListItem> listitems;
+    private List<ListItem> mListItems;
+    private AlarmReceiver alarm = new AlarmReceiver();
 
     //Realm Database
+
     private Realm realm;
     private RealmConfiguration realmConfig;
 
     //Ensures Proper Toast creation
     private boolean shouldExecuteOnPause = false;
+    SharedPreferences prefs = null;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
+        setHasOptionsMenu(true);
+        prefs = this.getActivity().getSharedPreferences("nas.tek.bluesync", Context.MODE_PRIVATE);
 
         realmConfig = new RealmConfiguration.Builder(getActivity()).build();
         Realm.setDefaultConfiguration(realmConfig);
         realm = Realm.getDefaultInstance();
 
-        RealmQuery<ListItem> query = realm.where(ListItem.class);
-        RealmResults<ListItem> result = query.findAll();
+        if (prefs.getBoolean("firstrun", true)) {
+            // Do first run stuff here
+            realm.executeTransaction(new Realm.Transaction() {
+                @Override
+                public void execute(Realm realm) {
+                    ListItem one = realm.createObject(ListItem.class);
+                    one.setTitle("Journal");
+                    one.setRfid(ConstantHelper.ONE);
 
-        if(result.size()!=0){
-            List<ListItem> managedListItems = new ArrayList<>();
-            for(ListItem li: result){
-                managedListItems.add(li);
-            }
-            listitems = new ArrayList<>();
-            listitems.addAll(managedListItems);
-        }else if(result.size()==0) {
-            listitems = Inventory.get().getItems();
+                    ListItem two = realm.createObject(ListItem.class);
+                    two.setTitle("Lab Coat");
+                    two.setRfid(ConstantHelper.TWO);
+
+                    ListItem three = realm.createObject(ListItem.class);
+                    three.setTitle("EVS Book");
+                    three.setRfid(ConstantHelper.THREE);
+
+                    ListItem four = realm.createObject(ListItem.class);
+                    four.setTitle("Bottle");
+                    four.setRfid(ConstantHelper.FOUR);
+
+                    ListItem five = realm.createObject(ListItem.class);
+                    five.setTitle("Umbrella");
+                    five.setRfid(ConstantHelper.FIVE);
+
+                    ListItem six = realm.createObject(ListItem.class);
+                    six.setTitle("Bag Locked");
+                    six.setRfid(ConstantHelper.SIX);
+
+                }
+            });
+
+            prefs.edit().putBoolean("firstrun", false).apply();
         }
-
-
-        mAdapter = new ItemAdapter(listitems);
-        mBluetoothSerial = new BluetoothSerial(getActivity(),this);
+        mListItems = new ArrayList<>();
+        //mBluetoothSerial = new BluetoothSerial(getActivity(),this);
         shouldExecuteOnPause = true;
-
-
 
     }
 
@@ -82,35 +102,39 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View v = inflater.inflate(R.layout.fragment_item_list,container,false);
-
         mRecyclerView = (RecyclerView)v.findViewById(R.id.fragment_list_item_recycler_view);
-        mRecyclerView.setHasFixedSize(true);
-        mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
-        mRecyclerView.setAdapter(mAdapter);
-
         return v;
     }
 
     @Override
-    public void onStart() {
-        super.onStart();
-        mBluetoothSerial.setup();
-    }
-
-
-    @Override
     public void onResume() {
         super.onResume();
-        if (mBluetoothSerial.checkBluetooth() && mBluetoothSerial.isBluetoothEnabled()) {
-            if (!mBluetoothSerial.isConnected()) {
-                mBluetoothSerial.start();
+
+
+
+        RealmQuery<ListItem> query = realm.where(ListItem.class);
+        final RealmResults<ListItem> result = query.findAll();
+
+        if(result.size()!=0) {
+            mListItems = new ArrayList<>();
+            for (ListItem li : result) {
+                mListItems.add(li);
             }
         }
-        mBluetoothSerial.connect(ConstantHelper.address);
+        mAdapter = new ItemAdapter(mListItems);
+        mRecyclerView.setHasFixedSize(true);
+        mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+        mRecyclerView.setAdapter(mAdapter);
 
-
+        realm.addChangeListener(new RealmChangeListener<Realm>() {
+            @Override
+            public void onChange(Realm element) {
+                mAdapter.notifyDataSetChanged();
+            }
+        });
 
     }
+
 
     @Override
     public void onPause() {
@@ -119,114 +143,53 @@ public class ListViewFragment extends Fragment implements BluetoothSerialListene
     }
 
     @Override
-    public void onStop() {
-        super.onStop();
-        mBluetoothSerial.stop();
-    }
-
-    @Override
     public void onDestroy() {
         super.onDestroy();
-        realm.executeTransaction(new Realm.Transaction() {
-            @Override
-            public void execute(Realm realm) {
-                for(ListItem li:listitems){
-                    ListItem managedListItem = realm.copyToRealm(li);
-                }
-            }
-        });
-
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        switch (requestCode){
-            case REQUEST_ENABLE_BLUETOOTH:
-                if(resultCode== Activity.RESULT_OK){
-                    mBluetoothSerial.setup();
-                }
-                break;
+        if(!isMyServiceRunning(ReadService.class)) {
+            realm.close();
         }
     }
 
-    //Implemented methods of BluetoothSerialListener
-    //========================================================================================
-
-
-    @Override
-    public void onBluetoothDeviceConnected(String name, String address) {
-        Toast.makeText(getActivity(), "Connected to  " + name + " with address  " + address, Toast.LENGTH_LONG).show();
-
-    }
-
-    @Override
-    public void onBluetoothNotSupported() {
-        new AlertDialog.Builder(getActivity())
-                .setMessage("No Bluetooth")
-                .setPositiveButton("Quit", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        getActivity().finish();
-                    }
-                })
-                .setCancelable(false)
-                .show();
-    }
-
-    @Override
-    public void onBluetoothDisabled() {
-        Intent enableBluetooth = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-        startActivityForResult(enableBluetooth, REQUEST_ENABLE_BLUETOOTH);
-    }
-
-    @Override
-    public void onBluetoothDeviceDisconnected() {
-        if(shouldExecuteOnPause) {
-            Toast.makeText(getActivity(), "Device disconnected. Please ensure device is in range and paired", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    @Override
-    public void onConnectingBluetoothDevice() {
-
-    }
-
-    @Override
-    public void onBluetoothSerialRead(String message) {
-        String string = "";
-
-        //Regex to format received Data
-        Pattern pattern = Pattern.compile("ID:(.*?):ID");
-        Matcher matcher = pattern.matcher(message);
-        if(matcher.find()) {
-            string = ConstantHelper.toHex(matcher.group(1).trim());
-            synchronized (listitems) {
-                for (int i = 0; i < listitems.size(); i++) {
-                    final int j=i;
-                    if(listitems.get(j).getRfid().equals(string)){
-                        final boolean isPresent = listitems.get(j).isPresent();
-                        realm.executeTransaction(new Realm.Transaction() {
-                            @Override
-                            public void execute(Realm realm) {
-                                listitems.get(j).setPresent(!isPresent);
-                            }
-                        });
-                        mAdapter.update(j);
-                    }
-                }
+    private boolean isMyServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) getActivity().getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                return true;
             }
         }
-
+        return false;
     }
 
     @Override
-    public void onBluetoothSerialWrite(String message) {
-
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        inflater.inflate(R.menu.menu_main,menu);
+        super.onCreateOptionsMenu(menu, inflater);
     }
 
-    //=============================================================================================
-
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch(item.getItemId()) {
+            case R.id.menu_enable_notification:
+                alarm.setAlarm(getActivity());
+                Toast.makeText(getActivity(), "Alarm set for 6:45 am", Toast.LENGTH_SHORT).show();
+                return true;
+            case R.id.menu_disable_notification:
+                alarm.cancelAlarm(getActivity());
+                Toast.makeText(getActivity(), "Reminder cancelled", Toast.LENGTH_SHORT).show();
+                return true;
+            case R.id.menu_start_service:
+                if (!isMyServiceRunning(ReadService.class)) {
+                    Intent i = new Intent(getActivity(), ReadService.class);
+                    getActivity().startService(i);
+                }
+                return true;
+            case R.id.menu_stop_service:
+                Intent i = new Intent(getActivity(), ReadService.class);
+                getActivity().stopService(i);
+                return true;
+        }
+        return false;
+    }
 
     //ViewHolder for RecyclerView
     private class ItemHolder extends RecyclerView.ViewHolder{
